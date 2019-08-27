@@ -1,60 +1,68 @@
-var friendMatch = require('../data/friends.js');
+const fs = require("fs");
+const path = require("path");
 
+const express = require("express");
 
-module.exports = function (app) {
+const router = express.Router();
 
-    app.get('/api/friends', function (req, res) {
-        res.json(friendMatch);
-    });
+const p = path.join(
+    path.dirname(process.mainModule.filename),
+    "app/data",
+    "friends.json"
+);
 
-    app.post('/api/friends', function (req, res) {
-
-
-        var newFriend = req.body;
-
-        for (var i = 0; i < newFriend.scores.length; i++) {
-            if (newFriend.scores[i] == "1 (Yes)") {
-
-                newFriend.scores[i] = 1;
-            } else if (newFriend.scores[i] == "3 (No)") {
-
-                newFriend.scores[i] = 3;
-            } else {
-
-                newFriend.scores[i] = parseInt(newFriend.scores[i]);
-            }
+const getFriendsFromFile = cb => {
+    fs.readFile(p, (err, fileContent) => {
+        if (err) {
+            cb([]);
+        } else {
+            cb(JSON.parse(fileContent));
         }
-
-
-        var comparisonArray = [];
-
-        for (var i = 0; i < friendMatch.length; i++) {
-
-            var comparedFriend = friendMatch[i];
-
-            var totalDifference = 0;
-
-            for (var k = 0; k < comparedFriend.scores.length; k++) {
-
-                var differenceOneScore = Math.abs(comparedFriend.scores[k] - newFriend.scores[k]);
-                totalDifference += differenceOneScore;
-            }
-
-            comparisonArray[i] = totalDifference;
-        }
-
-        var bestFriendNum = comparisonArray[0];
-        var bestFriendI = 0;
-
-        for (var i = 1; i < comparisonArray.length; i++) {
-            if (comparisonArray[i] < bestFriendNum) {
-                bestFriendNum = comparisonArray[i];
-                bestFriendI = i;
-            }
-        }
-
-        friendMatch.push(newFriend);
-
-        res.json(friendMatch[bestFriendI]);
     });
 };
+
+const matchFriend = (user, friends) => {
+    return friends
+        .map(friend => {
+            const total = friend.scores.reduce((totalScore, score, idx) => {
+                totalScore += Math.abs(user.scores[idx] - score);
+                return totalScore;
+            }, 0);
+            return {
+                ...friend,
+                total
+            };
+        })
+        .sort((a, b) => a.total - b.total)[0];
+};
+
+router.post("/api/friends", (req, res) => {
+    var user = req.body;
+    getFriendsFromFile(friends => {
+        let results = {
+            name: "No Friends have completed survey"
+        };
+        if (friends.length > 1) {
+            results = matchFriend(user, friends);
+        }
+        friends.push(user);
+        fs.writeFile(p, JSON.stringify(friends), err => {
+            console.log(err);
+        });
+
+        res.send(results);
+        return results;
+    });
+});
+
+router.get("/api/friends", (req, res) => {
+    getFriendsFromFile(friends => {
+        res.json(friends);
+    });
+});
+
+router.get("*", (req, res) => {
+    res.status(404).redirect("/");
+});
+
+module.exports = router;
