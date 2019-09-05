@@ -9,6 +9,7 @@ const p = path.join(
     path.dirname(process.mainModule.filename),
     "app/data",
     "friends.json"
+
 );
 
 const getFriendsFromFile = cb => {
